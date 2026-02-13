@@ -84,8 +84,8 @@ def create_text_frame(text, size, font_path, progress):
     text_bbox = draw.textbbox((0, 0), display_text, font=font, align="center")
     w, h = text_bbox[2] - text_bbox[0], text_bbox[3] - text_bbox[1]
     x, y = (size[0]-w)/2, (size[1]-h)/2
-    draw.text((x-random.randint(1,4), y+random.randint(1,4)), display_text, font=font, fill=(255, 0, 60), align="center")
-    draw.text((x+random.randint(1,4), y-random.randint(1,4)), display_text, font=font, fill=(0, 243, 255), align="center")
+    draw.text((x-random.randint(2,5), y+random.randint(2,5)), display_text, font=font, fill=(255, 0, 60), align="center")
+    draw.text((x+random.randint(2,5), y-random.randint(2,5)), display_text, font=font, fill=(0, 243, 255), align="center")
     draw.text((x, y), display_text, font=font, fill=(255, 255, 255), align="center")   
     return np.array(img).astype(np.uint8)
 
@@ -96,7 +96,7 @@ def mutate_voice(filename):
     out_file = os.path.join(TEMP_PATH, f"mutated_{random.randint(100,999)}.wav")
     pitch = str(random.randint(-400, 100))
     speed = str(random.uniform(0.92, 1.08))
-    cmd = [SOX_BINARY, input_path, out_file, "pitch", pitch, "speed", speed, "reverb", "45", "contrast", "20"]
+    cmd = [SOX_BINARY, input_path, out_file, "pitch", pitch, "speed", speed, "reverb", "50", "contrast", "20"]
     try:
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return AudioFileClip(out_file)
@@ -105,14 +105,14 @@ def mutate_voice(filename):
 
 def build_soundscape(duration):
     layers = []
-    for _ in range(random.randint(5, 10)):
+    for _ in range(random.randint(3, 6)):
         cat = random.choice(list(AUDIO_MANIFEST_STRUCTURE.keys()))
         fname = random.choice(AUDIO_MANIFEST_STRUCTURE[cat])
         url = f"https://taira-komori.net/sound_os2/{cat.lower()}/{fname}"
         path = download_asset(url, "sfx", f"{cat}_{fname}")
         if path:
             try:
-                c = AudioFileClip(path).volumex(random.uniform(0.05, 0.2))
+                c = AudioFileClip(path).volumex(random.uniform(0.05, 0.15))
                 if c.duration > duration:
                     c = c.subclip(0, duration)
                 start_offset = random.uniform(0, max(0, duration - c.duration))
@@ -134,19 +134,27 @@ for i, item in enumerate(SCRIPT_DATA):
     bg_path = bg_images[i % len(bg_images)]
     bg = ImageClip(bg_path).resize(SCREEN_SIZE).set_duration(master_duration)
     if i % 2 == 0:
-        bg = bg.fl(lambda gf, t: np.roll(gf(t), int(15 * np.sin(t*5)), axis=0))
-    text_clip = VideoClip(lambda t: create_text_frame(item['text'], SCREEN_SIZE, font_path, min(1.0, t/(master_duration*0.7))), duration=master_duration)
-    scene = CompositeVideoClip([bg, text_clip.set_opacity(0.8)], size=SCREEN_SIZE).set_audio(final_audio)
+        bg = bg.fl(lambda gf, t: np.roll(gf(t), int(20 * np.sin(t*12)), axis=0))
+    
+    txt_str = item['text']
+    text_clip = VideoClip(lambda t, s=txt_str, d=master_duration: create_text_frame(s, SCREEN_SIZE, font_path, min(1.0, t/(d*0.75))), duration=master_duration)
+    
+    scene = CompositeVideoClip([bg, text_clip.set_opacity(0.85)], size=SCREEN_SIZE).set_audio(final_audio)
     scene_clips.append(scene)
 
 if scene_clips:
-    final_video = concatenate_videoclips(scene_clips, method="compose")
+    final_video = concatenate_videoclips(scene_clips, method="chain")
     def apply_global_glitch(get_frame, t):
-        frame = get_frame(t).copy()
-        frame[::4, :, :] = (frame[::4, :, :] * 0.5).astype('uint8')
-        if random.random() > 0.98:
-            frame = (frame * 0.8 + np.random.randint(0, 50, frame.shape, dtype='uint8')).astype('uint8')
+        frame = get_frame(t)
+        if frame.shape[2] == 4: frame = frame[:,:,:3]
+        frame = frame.copy()
+        frame[::4, :, :] = (frame[::4, :, :] * 0.4).astype('uint8')
+        if random.random() > 0.96:
+            frame = (frame * 0.7 + np.random.randint(0, 80, frame.shape, dtype='uint8')).astype('uint8')
+        if random.random() > 0.99:
+            frame = 255 - frame
         return frame
+    
     final_video = final_video.fl(apply_global_glitch)
     output_path = os.path.join(BASE_PATH, OUTPUT_NAME)
     final_video.write_videofile(
@@ -154,8 +162,9 @@ if scene_clips:
         fps=FPS,
         codec="libx264",
         audio_codec="aac",
-        threads=4,
-        preset="ultrafast"
+        threads=1,
+        preset="ultrafast",
+        ffmpeg_params=["-crf", "28"]
     )
 
 for f in os.listdir(TEMP_PATH):
