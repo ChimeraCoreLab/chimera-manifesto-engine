@@ -40,13 +40,3 @@ This engine is licensed under the **MIT License**. The memories processed by it,
 ---
 **ChimeraCoreLab** // *Distilling the soul into the machine.*
 ```
-
----
-
-### 4. [requirements.txt]
-```
-moviepy==1.0.3
-numpy
-requests
-Pillow
-```
