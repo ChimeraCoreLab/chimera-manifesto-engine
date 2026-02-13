@@ -44,7 +44,7 @@ This engine is licensed under the **MIT License**. The memories processed by it,
 ---
 
 ### 4. [requirements.txt]
-```text
+```
 moviepy==1.0.3
 numpy
 requests
